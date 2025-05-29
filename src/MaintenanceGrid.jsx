@@ -1,7 +1,8 @@
-// MaintenanceEditor with Invygo cars hardcoded and color highlight + color map
+// MaintenanceEditor with robust date parsing
 
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
+import { differenceInDays, parse } from "date-fns";
 
 export default function MaintenanceEditor() {
   const [data, setData] = useState([]);
@@ -67,6 +68,47 @@ export default function MaintenanceEditor() {
     setDuplicatePlates(Object.fromEntries(Object.entries(counts).filter(([_, c]) => c > 1)));
   }, [modifiedData]);
 
+  const today = new Date();
+
+  const parseDate = (str) => {
+  if (!str || typeof str !== "string") return new Date("Invalid");
+  const formats = ["dd/MM/yyyy", "d-M-yyyy", "dd-MM-yyyy", "yyyy-MM-dd"];
+  for (const format of formats) {
+    const parsed = parse(str, format, new Date());
+    if (!isNaN(parsed)) return parsed;
+  }
+  const fallback = new Date(str);
+  return isNaN(fallback) ? new Date("Invalid") : fallback;
+};
+
+
+  const getDelayedCars = (rows) => {
+    return rows.filter(row => {
+      const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
+      const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
+      const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
+
+      const damage = damageKey && row[damageKey]?.toLowerCase();
+      const dateOutStr = dateOutKey && row[dateOutKey]?.trim();
+      const dateIn = dateInKey && row[dateInKey]?.trim();
+
+      if (!dateOutStr || dateIn) return false;
+
+      const dateOut = parseDate(dateOutStr);
+      if (isNaN(dateOut)) return false;
+
+      const daysPassed = differenceInDays(today, dateOut);
+
+      if (damage?.includes("oil") && daysPassed > 3) return true;
+      if (damage?.includes("accident") && daysPassed > 30) return true;
+      if (!damage?.includes("oil") && !damage?.includes("accident") && daysPassed > 3) return true;
+
+      return false;
+    });
+  };
+
+  const delayedCars = getDelayedCars(modifiedData);
+
   const filtered = modifiedData.filter(row => {
     const matchesSearch = Object.values(row).some(v => v.toLowerCase().includes(search.toLowerCase()));
     const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
@@ -80,9 +122,9 @@ export default function MaintenanceEditor() {
     if (filterMode === "ready") return matchesSearch && hasDate;
     if (filterMode === "notready") return matchesSearch && !hasDate;
     if (filterMode === "duplicates") return plate && duplicatePlates[plate];
+    if (filterMode === "delayed") return delayedCars.includes(row);
     return matchesSearch;
   });
-
   const getRowStyle = (row) => {
     const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
     const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
@@ -95,11 +137,12 @@ export default function MaintenanceEditor() {
     const isReady = Boolean(dateIn);
 
     if (plate && duplicatePlates[plate]) return { backgroundColor: "#e53935", color: "#fff" };
-    if (isInvygo && isReady) return { backgroundColor: "#bbdefb" }; // Blue
-    if (isInvygo && !isReady) return { backgroundColor: "#fff9c4" }; // Yellow
-    if (!isInvygo && isReady) return { backgroundColor: "#c8e6c9" }; // Green
-    if (isAccident) return { backgroundColor: "#ffcdd2" }; // Red
-    return {}; // default white
+    if (delayedCars.includes(row)) return { backgroundColor: "#ff7043", color: "#fff" };
+    if (isInvygo && isReady) return { backgroundColor: "#bbdefb" };
+    if (isInvygo && !isReady) return { backgroundColor: "#fff9c4" };
+    if (!isInvygo && isReady) return { backgroundColor: "#c8e6c9" };
+    if (isAccident) return { backgroundColor: "#ffcdd2" };
+    return {};
   };
 
   const handleEdit = (rowIndex, key, value) => {
@@ -146,6 +189,7 @@ export default function MaintenanceEditor() {
         <div style={{ background: "#c8e6c9", padding: "4px 8px", borderRadius: 6 }}>⬤ Other - Repaired</div>
         <div style={{ background: "#ffcdd2", padding: "4px 8px", borderRadius: 6 }}>⬤ Accident - Not Ready</div>
         <div style={{ background: "#ffffff", border: "1px solid #ccc", padding: "4px 8px", borderRadius: 6 }}>⬤ Other - Not Ready</div>
+        <div style={{ background: "#ff7043", padding: "4px 8px", borderRadius: 6, color: "white" }}>⬤ ⏱ Delayed</div>
       </div>
 
       <h2 style={{ textAlign: "center", color: "#6a1b9a" }}>🛠 Maintenance Sheet Editor</h2>
@@ -155,6 +199,7 @@ export default function MaintenanceEditor() {
         <button onClick={() => setFilterMode("invygo")} style={btnStyle("#4caf50")}>📦 Invygo Cars</button>
         <button onClick={() => setFilterMode("notready")} style={btnStyle("#f44336")}>❌ Not Ready</button>
         <button onClick={() => setFilterMode("duplicates")} style={btnStyle("#9c27b0")}>🛑 Duplicates</button>
+        <button onClick={() => setFilterMode("delayed")} style={btnStyle("#ff7043")}>⏱ Show Delayed</button>
         <button onClick={() => setFilterMode("all")} style={btnStyle("#1976d2")}>🔄 Show All</button>
         <input type="text" placeholder="🔍 Search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ padding: 8, minWidth: 250, borderRadius: 6, border: "1px solid #ccc" }} />
         <button onClick={exportToExcel} style={btnStyle("#388e3c")}>📤 Export</button>
@@ -162,11 +207,11 @@ export default function MaintenanceEditor() {
 
       <div style={{ textAlign: "center", marginBottom: 10, color: "#555" }}>✅ Showing {filtered.length} result(s)</div>
 
-      <div style={{ textAlign: "center", marginBottom: 15 }}>
-        <a href="https://moalamir52.github.io/Yelo/#dashboard" style={{ background: "#ffd600", color: "#6a1b9a", padding: "8px 16px", borderRadius: 8, fontWeight: "bold", textDecoration: "none", border: "2px solid #6a1b9a" }}>
-          ← Back to YELO Dashboard
-        </a>
-      </div>
+      {delayedCars.length > 0 && (
+        <div style={{ textAlign: "center", marginBottom: 10, color: "red", fontWeight: "bold" }}>
+          🚨 يوجد {delayedCars.length} سيارة متأخرة عن المدة المسموحة في الورشة!
+        </div>
+      )}
 
       <div ref={tableRef} style={{ overflowX: "auto", maxHeight: "70vh" }}>
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
@@ -202,3 +247,4 @@ export default function MaintenanceEditor() {
     </div>
   );
 }
+
