@@ -236,36 +236,11 @@ export default function MaintenanceEditor() {
         <div style={{ background: "#ffcdd2", padding: "4px 8px", borderRadius: 6 }}>⬤ Accident - Not Ready</div>
         <div style={{ background: "#ffffff", border: "1px solid #ccc", padding: "4px 8px", borderRadius: 6 }}>⬤ Other - Not Ready</div>
         <div style={{ background: "#ff7043", padding: "4px 8px", borderRadius: 6, color: "white" }}>⬤ ⏱ Delayed</div>
-        
       </div>
 
       <h2 style={{ textAlign: "center", color: "#6a1b9a" }}>🛠 Maintenance Sheet Editor</h2>
 
       <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-        <a
-  href="https://moalamir52.github.io/Yelo/#dashboard"
-  style={{
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    background: "#ffd600",
-    color: "#6a1b9a",
-    border: "3px solid #6a1b9a",
-    borderRadius: 10,
-    padding: "10px 28px",
-    fontWeight: "bold",
-    fontSize: 12,
-    textDecoration: "none",
-    boxShadow: "0 2px 8px rgba(106,27,154,0.08)",
-    marginBottom: 16,
-    marginTop: 8,
-    transition: "box-shadow 0.2s"
-  }}
->
-  <span style={{ fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center" }}>
-  </span>
-  Back to YELO
-</a>
         <button onClick={() => setFilterMode("accident")} style={btnStyle("#ff9800")}>🚗 Car Accident ({accidentCount})</button>
         <button onClick={() => setFilterMode("invygo")} style={btnStyle("#4caf50")}>📦 Invygo Cars ({invygoCount})</button>
         <button onClick={() => setFilterMode("notready")} style={btnStyle("#f44336")}>❌ Not Ready ({notReadyCount})</button>
