@@ -279,7 +279,7 @@ export default function MaintenanceEditor() {
               {Object.keys(modifiedData[0] || {}).map((key) => (
                 <th key={key} style={{ border: "1px solid #ccc", padding: 8 }}>{key}</th>
               ))}
-              <th style={{ border: "1px solid #ccc", padding: 8 }}>ملاحظات</th>
+              <th style={{ border: "1px solid #ccc", padding: 8 }}>Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -308,7 +308,7 @@ export default function MaintenanceEditor() {
                       />
                     </td>
                   ))}
-                  <td style={{ border: "1px solid #ccc", padding: 6, color: "#d84315", fontWeight: "bold", fontSize: 13 }}>{note}</td>
+                  <td style={{ border: "1px solid #ccc", padding: 6, color: "#fff", fontWeight: "bold", fontSize: 13 }}>{note}</td>
                 </tr>
               );
             })}
