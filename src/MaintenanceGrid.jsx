@@ -11,22 +11,20 @@ export default function MaintenanceEditor() {
   const [filterMode, setFilterMode] = useState("all");
   const [duplicatePlates, setDuplicatePlates] = useState({});
   const [duplicateRows, setDuplicateRows] = useState({});
+  const [invygoList, setInvygoList] = useState([]);
   const tableRef = useRef(null);
 
-  // قائمة أرقام سيارات invygo كاملة
-  const [invygoList, setInvygoList] = useState([]);
-
-useEffect(() => {
-  const fetchInvygoList = async () => {
-    const response = await fetch("https://docs.google.com/spreadsheets/d/1sHvEQMtt3suuxuMA0zhcXk5TYGqZzit0JvGLk1CQ0LI/export?format=csv&gid=1812913588");
-    const text = await response.text();
-    const rows = text.split("\n").map(r => r.trim()).filter(Boolean);
-    // تجاهل العنوان إذا كان موجود
-    const plates = rows.slice(1).map(r => r.replace(/\s+/g, "").toLowerCase());
-    setInvygoList(plates);
-  };
-  fetchInvygoList();
-}, []);
+  // Fetch Invygo list from Google Sheet
+  useEffect(() => {
+    const fetchInvygoList = async () => {
+      const response = await fetch("https://docs.google.com/spreadsheets/d/1sHvEQMtt3suuxuMA0zhcXk5TYGqZzit0JvGLk1CQ0LI/export?format=csv&gid=1812913588");
+      const text = await response.text();
+      const rows = text.split("\n").map(r => r.trim()).filter(Boolean);
+      const plates = rows.slice(1).map(r => r.replace(/\s+/g, "").toLowerCase());
+      setInvygoList(plates);
+    };
+    fetchInvygoList();
+  }, []);
 
   function normalizePlate(plate) {
     return plate?.trim().toLowerCase().replace(/\s+/g, "") || "";
@@ -103,7 +101,7 @@ useEffect(() => {
 
   const delayedCars = getDelayedCars(modifiedData);
 
-  // عدادات الفلاتر
+  // Filter counts
   const accidentCount = modifiedData.filter(row => {
     const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
     const damageText = damageKey && row[damageKey]?.toLowerCase();
@@ -200,23 +198,22 @@ useEffect(() => {
     XLSX.writeFile(wb, `Maintenance_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
   const exportDelayed = () => {
-  // أضف عمود Days Delayed لكل صف
-  const exportRows = delayedCars.map(row => {
-    const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
-    const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
-    const dateOutStr = dateOutKey && row[dateOutKey];
-    const dateOut = parseDate(dateOutStr);
-    const daysPassed = differenceInDays(today, dateOut);
-    return {
-      ...row,
-      "Days Delayed": daysPassed
-    };
-  });
-  const ws = XLSX.utils.json_to_sheet(exportRows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Delayed");
-  XLSX.writeFile(wb, `Delayed_${new Date().toISOString().slice(0, 10)}.xlsx`);
-};
+    // Add Days Delayed column
+    const exportRows = delayedCars.map(row => {
+      const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
+      const dateOutStr = dateOutKey && row[dateOutKey];
+      const dateOut = parseDate(dateOutStr);
+      const daysPassed = differenceInDays(today, dateOut);
+      return {
+        ...row,
+        "Days Delayed": daysPassed
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Delayed");
+    XLSX.writeFile(wb, `Delayed_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
   const exportDuplicates = () => {
     const plates = Object.keys(duplicatePlates);
     const rows = modifiedData.filter(row => plates.includes(normalizePlate(row["Vehicle"])));
@@ -261,7 +258,7 @@ useEffect(() => {
 
       {delayedCars.length > 0 && (
         <div style={{ textAlign: "center", marginBottom: 10, color: "red", fontWeight: "bold" }}>
-          🚨 يوجد {delayedCars.length} سيارة متأخرة عن المدة المسموحة في الورشة!
+          🚨 There are {delayedCars.length} delayed cars in the workshop!
         </div>
       )}
 
@@ -269,11 +266,11 @@ useEffect(() => {
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead style={{ position: "sticky", top: 0, background: "#ffd600", color: "#6a1b9a" }}>
             <tr>
-              <th style={{ border: "1px solid #ccc", padding: 8 }}>#</th>
+              <th style={{ border: "1px solid #ccc", padding: 8, textAlign: "center" }}>#</th>
               {Object.keys(modifiedData[0] || {}).map((key) => (
-                <th key={key} style={{ border: "1px solid #ccc", padding: 8 }}>{key}</th>
+                <th key={key} style={{ border: "1px solid #ccc", padding: 8, textAlign: "center" }}>{key}</th>
               ))}
-              <th style={{ border: "1px solid #ccc", padding: 8 }}>Notes</th>
+              <th style={{ border: "1px solid #ccc", padding: 8, textAlign: "center" }}>Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -284,25 +281,25 @@ useEffect(() => {
                 const rows = duplicateRows[plate] || [];
                 const others = rows.filter(n => n !== rowIndex + 1);
                 if (others.length > 0) {
-                  note = `مكرر مع الصفوف: ${others.join(", ")}`;
+                  note = `Duplicate with rows: ${others.join(", ")}`;
                 }
               }
               return (
                 <tr key={rowIndex} style={{ ...getRowStyle(row), backgroundColor: selectedRowIndex === rowIndex ? "#c5cae9" : getRowStyle(row).backgroundColor }}>
                   <td style={{ border: "1px solid #ccc", padding: 6, textAlign: "center" }} onClick={() => setSelectedRowIndex(rowIndex)}>{rowIndex + 1}</td>
                   {Object.entries(row).map(([key, value], colIndex) => (
-                    <td key={colIndex} style={{ border: "1px solid #ddd", padding: 6 }}>
+                    <td key={colIndex} style={{ border: "1px solid #ddd", padding: 6, textAlign: "center" }}>
                       <input
                         value={value}
                         data-row={rowIndex}
                         data-col={colIndex}
                         onChange={(e) => handleEdit(rowIndex, key, e.target.value)}
                         onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
-                        style={{ width: "100%", border: "none", background: "transparent" }}
+                        style={{ width: "100%", border: "none", background: "transparent", textAlign: "center" }}
                       />
                     </td>
                   ))}
-                  <td style={{ border: "1px solid #ccc", padding: 6, color: "#fff", fontWeight: "bold", fontSize: 13 }}>{note}</td>
+                  <td style={{ border: "1px solid #ccc", padding: 6, color: "#fff", background: "#e53935", fontWeight: "bold", fontSize: 13, textAlign: "center" }}>{note}</td>
                 </tr>
               );
             })}
@@ -311,46 +308,46 @@ useEffect(() => {
       </div>
 
       {filterMode === "delayed" && delayedCars.length > 0 && (
-  <div style={{ marginTop: 30 }}>
-    <h3 style={{ color: "#d84315", textAlign: "center", marginBottom: 16, letterSpacing: 1 }}>Delayed Cars Report</h3>
-    <table style={{
-      borderCollapse: "separate",
-      borderSpacing: 0,
-      width: "100%",
-      background: "#fff",
-      borderRadius: 12,
-      overflow: "hidden",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.07)"
-    }}>
-      <thead>
-        <tr style={{ background: "#f5f5f5" }}>
-          <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Car Plate</th>
-          <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Damage Type</th>
-          <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Date Out</th>
-          <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Days Delayed</th>
-        </tr>
-      </thead>
-      <tbody>
-        {delayedCars.map((row, i) => {
-          const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
-          const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
-          const damage = damageKey && row[damageKey];
-          const dateOutStr = dateOutKey && row[dateOutKey];
-          const dateOut = parseDate(dateOutStr);
-          const daysPassed = differenceInDays(today, dateOut);
-          return (
-            <tr key={i} style={{ background: i % 2 === 0 ? "#fafafa" : "#f0f4c3" }}>
-              <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>{row["Vehicle"]}</td>
-              <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center" }}>{damage}</td>
-              <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center" }}>{dateOutStr}</td>
-              <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", color: "#d84315", fontWeight: "bold" }}>{daysPassed}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  </div>
-)}
+        <div style={{ marginTop: 30 }}>
+          <h3 style={{ color: "#d84315", textAlign: "center", marginBottom: 16, letterSpacing: 1 }}>Delayed Cars Report</h3>
+          <table style={{
+            borderCollapse: "separate",
+            borderSpacing: 0,
+            width: "100%",
+            background: "#fff",
+            borderRadius: 12,
+            overflow: "hidden",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.07)"
+          }}>
+            <thead>
+              <tr style={{ background: "#f5f5f5" }}>
+                <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Car Plate</th>
+                <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Damage Type</th>
+                <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Date Out</th>
+                <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Days Delayed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {delayedCars.map((row, i) => {
+                const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
+                const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
+                const damage = damageKey && row[damageKey];
+                const dateOutStr = dateOutKey && row[dateOutKey];
+                const dateOut = parseDate(dateOutStr);
+                const daysPassed = differenceInDays(today, dateOut);
+                return (
+                  <tr key={i} style={{ background: i % 2 === 0 ? "#fafafa" : "#f0f4c3" }}>
+                    <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>{row["Vehicle"]}</td>
+                    <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center" }}>{damage}</td>
+                    <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center" }}>{dateOutStr}</td>
+                    <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", color: "#d84315", fontWeight: "bold" }}>{daysPassed}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
       <style>{`
         @media (max-width: 900px) {
           table { min-width: 600px !important; }
