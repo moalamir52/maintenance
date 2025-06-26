@@ -257,7 +257,7 @@ export default function MaintenanceEditor() {
     transition: "box-shadow 0.2s"
   }}
 >
-  <span style={{ fontSize: 18, display: "flex", flexDirection: "column", alignItems: "center" }}>
+  <span style={{ fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center" }}>
   </span>
   Back to YELO
 </a>
