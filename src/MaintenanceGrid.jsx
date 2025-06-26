@@ -258,7 +258,7 @@ export default function MaintenanceEditor() {
 
       {delayedCars.length > 0 && (
         <div style={{ textAlign: "center", marginBottom: 10, color: "red", fontWeight: "bold" }}>
-          🚨 There are {delayedCars.length} delayed cars in the workshop!
+          🚨 There are {delayedCars.length} delayed cars in the Showroom!
         </div>
       )}
 
