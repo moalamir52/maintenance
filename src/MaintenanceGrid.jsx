@@ -299,7 +299,7 @@ export default function MaintenanceEditor() {
                       />
                     </td>
                   ))}
-                  <td style={{ border: "1px solid #ccc", padding: 6, color: "#fff", background: "#e53935", fontWeight: "bold", fontSize: 13, textAlign: "center" }}>{note}</td>
+                  <td style={{ border: "1px solid #ccc", padding: 6, color: "#fff", fontWeight: "bold", fontSize: 13, textAlign: "center" }}>{note}</td>
                 </tr>
               );
             })}
