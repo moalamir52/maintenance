@@ -13,32 +13,7 @@ export default function MaintenanceEditor() {
   const [duplicateRows, setDuplicateRows] = useState({});
   const [invygoList, setInvygoList] = useState([]);
   const tableRef = useRef(null);
-<a
-  href="https://moalamir52.github.io/Yelo/#dashboard"
-  style={{
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    background: "#ffd600",
-    color: "#6a1b9a",
-    border: "3px solid #6a1b9a",
-    borderRadius: 12,
-    padding: "10px 28px",
-    fontWeight: "bold",
-    fontSize: 22,
-    textDecoration: "none",
-    boxShadow: "0 2px 8px rgba(106,27,154,0.08)",
-    marginBottom: 24,
-    marginTop: 8,
-    transition: "box-shadow 0.2s"
-  }}
->
-  <span style={{ fontSize: 18, display: "flex", flexDirection: "column", alignItems: "center" }}>
-    <span style={{ fontSize: 13, color: "#6a1b9a", fontWeight: "normal" }}>BACK</span>
-    <span style={{ fontSize: 20 }}>←</span>
-  </span>
-  Back to YELO
-</a>
+
   // Fetch Invygo list from Google Sheet
   useEffect(() => {
     const fetchInvygoList = async () => {
@@ -262,7 +237,32 @@ export default function MaintenanceEditor() {
         <div style={{ background: "#ffffff", border: "1px solid #ccc", padding: "4px 8px", borderRadius: 6 }}>⬤ Other - Not Ready</div>
         <div style={{ background: "#ff7043", padding: "4px 8px", borderRadius: 6, color: "white" }}>⬤ ⏱ Delayed</div>
       </div>
-
+<a
+  href="https://moalamir52.github.io/Yelo/#dashboard"
+  style={{
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    background: "#ffd600",
+    color: "#6a1b9a",
+    border: "3px solid #6a1b9a",
+    borderRadius: 12,
+    padding: "10px 28px",
+    fontWeight: "bold",
+    fontSize: 22,
+    textDecoration: "none",
+    boxShadow: "0 2px 8px rgba(106,27,154,0.08)",
+    marginBottom: 24,
+    marginTop: 8,
+    transition: "box-shadow 0.2s"
+  }}
+>
+  <span style={{ fontSize: 18, display: "flex", flexDirection: "column", alignItems: "center" }}>
+    <span style={{ fontSize: 13, color: "#6a1b9a", fontWeight: "normal" }}>BACK</span>
+    <span style={{ fontSize: 20 }}>←</span>
+  </span>
+  Back to YELO
+</a>
       <h2 style={{ textAlign: "center", color: "#6a1b9a" }}>🛠 Maintenance Sheet Editor</h2>
 
       <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
