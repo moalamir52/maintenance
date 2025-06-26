@@ -249,7 +249,7 @@ export default function MaintenanceEditor() {
     borderRadius: 10,
     padding: "10px 28px",
     fontWeight: "bold",
-    fontSize: 22,
+    fontSize: 12,
     textDecoration: "none",
     boxShadow: "0 2px 8px rgba(106,27,154,0.08)",
     marginBottom: 16,
