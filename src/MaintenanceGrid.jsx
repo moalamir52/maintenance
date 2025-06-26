@@ -246,13 +246,13 @@ export default function MaintenanceEditor() {
     background: "#ffd600",
     color: "#6a1b9a",
     border: "3px solid #6a1b9a",
-    borderRadius: 12,
+    borderRadius: 10,
     padding: "10px 28px",
     fontWeight: "bold",
     fontSize: 22,
     textDecoration: "none",
     boxShadow: "0 2px 8px rgba(106,27,154,0.08)",
-    marginBottom: 24,
+    marginBottom: 16,
     marginTop: 8,
     transition: "box-shadow 0.2s"
   }}
