@@ -213,7 +213,7 @@ export default function MaintenanceEditor() {
         </div>
       )}
 
-      <div ref={tableRef} style={{ overflowX: "auto", maxHeight: "70vh" }}>
+      <div ref={tableRef} style={{ overflowX: "auto", maxHeigششht: "70vh" }}>
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead style={{ position: "sticky", top: 0, background: "#ffd600", color: "#6a1b9a" }}>
             <tr>
