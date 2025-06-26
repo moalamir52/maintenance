@@ -258,8 +258,6 @@ export default function MaintenanceEditor() {
   }}
 >
   <span style={{ fontSize: 18, display: "flex", flexDirection: "column", alignItems: "center" }}>
-    <span style={{ fontSize: 13, color: "#6a1b9a", fontWeight: "normal" }}>BACK</span>
-    <span style={{ fontSize: 12 }}>←</span>
   </span>
   Back to YELO
 </a>
