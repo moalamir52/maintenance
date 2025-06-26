@@ -218,11 +218,23 @@ export default function MaintenanceEditor() {
     XLSX.writeFile(wb, `Maintenance_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
   const exportDelayed = () => {
-    const ws = XLSX.utils.json_to_sheet(delayedCars);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Delayed");
-    XLSX.writeFile(wb, `Delayed_${new Date().toISOString().slice(0, 10)}.xlsx`);
-  };
+  // أضف عمود Days Delayed لكل صف
+  const exportRows = delayedCars.map(row => {
+    const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
+    const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
+    const dateOutStr = dateOutKey && row[dateOutKey];
+    const dateOut = parseDate(dateOutStr);
+    const daysPassed = differenceInDays(today, dateOut);
+    return {
+      ...row,
+      "Days Delayed": daysPassed
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(exportRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Delayed");
+  XLSX.writeFile(wb, `Delayed_${new Date().toISOString().slice(0, 10)}.xlsx`);
+};
   const exportDuplicates = () => {
     const plates = Object.keys(duplicatePlates);
     const rows = modifiedData.filter(row => plates.includes(normalizePlate(row["Vehicle"])));
