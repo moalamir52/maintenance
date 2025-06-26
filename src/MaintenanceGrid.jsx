@@ -1,5 +1,3 @@
-// MaintenanceEditor with robust date parsing
-
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { differenceInDays, parse } from "date-fns";
@@ -12,8 +10,10 @@ export default function MaintenanceEditor() {
   const [selectedRowIndex, setSelectedRowIndex] = useState(null);
   const [filterMode, setFilterMode] = useState("all");
   const [duplicatePlates, setDuplicatePlates] = useState({});
+  const [duplicateRows, setDuplicateRows] = useState({});
   const tableRef = useRef(null);
 
+  // قائمة أرقام سيارات invygo كاملة
   const invygoList = [
     "f62443", "e62059", "e48708", "g16281", "f67224", "f60973", "y87421", "g20385", "f10750", "e59684",
     "t64026", "r69915", "t28875", "t88742", "r72392", "t61471", "t61074", "s32761", "s30916", "s34737", "s37248",
@@ -46,6 +46,10 @@ export default function MaintenanceEditor() {
     "q96453", "r70466", "r68219", "r67749", "q95389", "r72154", "r56530", "r41033"
   ];
 
+  function normalizePlate(plate) {
+    return plate?.trim().toLowerCase().replace(/\s+/g, "") || "";
+  }
+
   useEffect(() => {
     const fetchSheet = async () => {
       const response = await fetch("https://docs.google.com/spreadsheets/d/1v4rQWn6dYPVQPd-PkhvrDNgKVnexilrR2XIUVa5RKEM/export?format=csv&gid=0");
@@ -61,26 +65,33 @@ export default function MaintenanceEditor() {
 
   useEffect(() => {
     const counts = {};
-    modifiedData.forEach(row => {
-      const plate = row["Vehicle"]?.trim().toLowerCase().replace(/\s+/g, "");
-      if (plate) counts[plate] = (counts[plate] || 0) + 1;
+    const rowMap = {};
+    modifiedData.forEach((row, idx) => {
+      const plate = normalizePlate(row["Vehicle"]);
+      const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
+      const hasDateIn = dateInKey && row[dateInKey]?.trim() !== "";
+      if (plate && !hasDateIn) {
+        counts[plate] = (counts[plate] || 0) + 1;
+        rowMap[plate] = rowMap[plate] || [];
+        rowMap[plate].push(idx + 1);
+      }
     });
     setDuplicatePlates(Object.fromEntries(Object.entries(counts).filter(([_, c]) => c > 1)));
+    setDuplicateRows(rowMap);
   }, [modifiedData]);
 
   const today = new Date();
 
   const parseDate = (str) => {
-  if (!str || typeof str !== "string") return new Date("Invalid");
-  const formats = ["dd/MM/yyyy", "d-M-yyyy", "dd-MM-yyyy", "yyyy-MM-dd"];
-  for (const format of formats) {
-    const parsed = parse(str, format, new Date());
-    if (!isNaN(parsed)) return parsed;
-  }
-  const fallback = new Date(str);
-  return isNaN(fallback) ? new Date("Invalid") : fallback;
-};
-
+    if (!str || typeof str !== "string") return new Date("Invalid");
+    const formats = ["dd/MM/yyyy", "d-M-yyyy", "dd-MM-yyyy", "yyyy-MM-dd"];
+    for (const format of formats) {
+      const parsed = parse(str, format, new Date());
+      if (!isNaN(parsed)) return parsed;
+    }
+    const fallback = new Date(str);
+    return isNaN(fallback) ? new Date("Invalid") : fallback;
+  };
 
   const getDelayedCars = (rows) => {
     return rows.filter(row => {
@@ -99,9 +110,10 @@ export default function MaintenanceEditor() {
 
       const daysPassed = differenceInDays(today, dateOut);
 
-      if (damage?.includes("oil") && daysPassed > 3) return true;
-      if (damage?.includes("accident") && daysPassed > 30) return true;
-      if (!damage?.includes("oil") && !damage?.includes("accident") && daysPassed > 3) return true;
+      if (damage?.includes("accident") && damage?.includes("oil") && daysPassed > 37) return true;
+      if (damage?.includes("oil") && !damage?.includes("accident") && daysPassed > 3) return true;
+      if (damage?.includes("accident") && !damage?.includes("oil") && daysPassed > 30) return true;
+      if (!damage?.includes("oil") && !damage?.includes("accident") && daysPassed > 7) return true;
 
       return false;
     });
@@ -109,13 +121,34 @@ export default function MaintenanceEditor() {
 
   const delayedCars = getDelayedCars(modifiedData);
 
+  // عدادات الفلاتر
+  const accidentCount = modifiedData.filter(row => {
+    const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
+    const damageText = damageKey && row[damageKey]?.toLowerCase();
+    const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
+    const hasDate = dateInKey && row[dateInKey]?.trim() !== "";
+    return damageText?.includes("accident") && !hasDate;
+  }).length;
+  const invygoCount = modifiedData.filter(row => {
+    const plate = normalizePlate(row["Vehicle"]);
+    const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
+    const hasDate = dateInKey && row[dateInKey]?.trim() !== "";
+    return plate && invygoList.includes(plate) && !hasDate;
+  }).length;
+  const notReadyCount = modifiedData.filter(row => {
+    const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
+    return dateInKey && row[dateInKey]?.trim() === "";
+  }).length;
+  const duplicatesCount = Object.values(duplicatePlates).reduce((a, b) => a + b, 0);
+  const delayedCount = delayedCars.length;
+
   const filtered = modifiedData.filter(row => {
     const matchesSearch = Object.values(row).some(v => v.toLowerCase().includes(search.toLowerCase()));
     const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
     const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
     const damageText = damageKey && row[damageKey]?.toLowerCase();
     const hasDate = dateInKey && row[dateInKey]?.trim() !== "";
-    const plate = row["Vehicle"]?.trim().toLowerCase().replace(/\s+/g, "");
+    const plate = normalizePlate(row["Vehicle"]);
 
     if (filterMode === "accident") return matchesSearch && damageText?.includes("accident") && !hasDate;
     if (filterMode === "invygo") return matchesSearch && plate && invygoList.includes(plate) && !hasDate;
@@ -125,12 +158,13 @@ export default function MaintenanceEditor() {
     if (filterMode === "delayed") return delayedCars.includes(row);
     return matchesSearch;
   });
+
   const getRowStyle = (row) => {
     const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
     const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
     const dateIn = dateInKey && row[dateInKey]?.trim();
     const damageText = damageKey && row[damageKey]?.toLowerCase();
-    const plate = row["Vehicle"]?.trim().toLowerCase().replace(/\s+/g, "");
+    const plate = normalizePlate(row["Vehicle"]);
 
     const isInvygo = invygoList.includes(plate);
     const isAccident = damageText?.includes("accident") && !dateIn;
@@ -170,11 +204,32 @@ export default function MaintenanceEditor() {
     if (e.key === "Enter") e.target.blur();
   };
 
+  const resetData = () => {
+    setModifiedData(data);
+    setSearch("");
+    setFilterMode("all");
+    setSelectedRowIndex(null);
+  };
+
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(modifiedData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Maintenance");
     XLSX.writeFile(wb, `Maintenance_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+  const exportDelayed = () => {
+    const ws = XLSX.utils.json_to_sheet(delayedCars);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Delayed");
+    XLSX.writeFile(wb, `Delayed_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+  const exportDuplicates = () => {
+    const plates = Object.keys(duplicatePlates);
+    const rows = modifiedData.filter(row => plates.includes(normalizePlate(row["Vehicle"])));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Duplicates");
+    XLSX.writeFile(wb, `Duplicates_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   function btnStyle(color) {
@@ -182,7 +237,7 @@ export default function MaintenanceEditor() {
   }
 
   return (
-    <div style={{ padding: 20, fontFamily: "Segoe UI" }}>
+    <div style={{ padding: 10, fontFamily: "Segoe UI", maxWidth: 1200, margin: "auto" }}>
       <div style={{ display: "flex", justifyContent: "center", gap: 20, flexWrap: "wrap", marginBottom: 20 }}>
         <div style={{ background: "#bbdefb", padding: "4px 8px", borderRadius: 6 }}>⬤ Invygo - Repaired</div>
         <div style={{ background: "#fff9c4", padding: "4px 8px", borderRadius: 6 }}>⬤ Invygo - Not Ready</div>
@@ -195,14 +250,17 @@ export default function MaintenanceEditor() {
       <h2 style={{ textAlign: "center", color: "#6a1b9a" }}>🛠 Maintenance Sheet Editor</h2>
 
       <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-        <button onClick={() => setFilterMode("accident")} style={btnStyle("#ff9800")}>🚗 Car Accident</button>
-        <button onClick={() => setFilterMode("invygo")} style={btnStyle("#4caf50")}>📦 Invygo Cars</button>
-        <button onClick={() => setFilterMode("notready")} style={btnStyle("#f44336")}>❌ Not Ready</button>
-        <button onClick={() => setFilterMode("duplicates")} style={btnStyle("#9c27b0")}>🛑 Duplicates</button>
-        <button onClick={() => setFilterMode("delayed")} style={btnStyle("#ff7043")}>⏱ Show Delayed</button>
-        <button onClick={() => setFilterMode("all")} style={btnStyle("#1976d2")}>🔄 Show All</button>
+        <button onClick={() => setFilterMode("accident")} style={btnStyle("#ff9800")}>🚗 Car Accident ({accidentCount})</button>
+        <button onClick={() => setFilterMode("invygo")} style={btnStyle("#4caf50")}>📦 Invygo Cars ({invygoCount})</button>
+        <button onClick={() => setFilterMode("notready")} style={btnStyle("#f44336")}>❌ Not Ready ({notReadyCount})</button>
+        <button onClick={() => setFilterMode("duplicates")} style={btnStyle("#9c27b0")}>🛑 Duplicates ({duplicatesCount})</button>
+        <button onClick={() => setFilterMode("delayed")} style={btnStyle("#ff7043")}>⏱ Show Delayed ({delayedCount})</button>
+        <button onClick={() => setFilterMode("all")} style={btnStyle("#1976d2")}>🔄 Show All ({modifiedData.length})</button>
         <input type="text" placeholder="🔍 Search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ padding: 8, minWidth: 250, borderRadius: 6, border: "1px solid #ccc" }} />
-        <button onClick={exportToExcel} style={btnStyle("#388e3c")}>📤 Export</button>
+        <button onClick={exportToExcel} style={btnStyle("#388e3c")}>📤 Export All</button>
+        <button onClick={exportDelayed} style={btnStyle("#ff7043")}>📤 Export Delayed</button>
+        <button onClick={exportDuplicates} style={btnStyle("#9c27b0")}>📤 Export Duplicates</button>
+        <button onClick={resetData} style={btnStyle("#757575")}>↩️ Reset</button>
       </div>
 
       <div style={{ textAlign: "center", marginBottom: 10, color: "#555" }}>✅ Showing {filtered.length} result(s)</div>
@@ -213,7 +271,7 @@ export default function MaintenanceEditor() {
         </div>
       )}
 
-      <div ref={tableRef} style={{ overflowX: "auto", maxHeigششht: "70vh" }}>
+      <div ref={tableRef} style={{ overflowX: "auto", maxHeight: "70vh" }}>
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead style={{ position: "sticky", top: 0, background: "#ffd600", color: "#6a1b9a" }}>
             <tr>
@@ -221,30 +279,86 @@ export default function MaintenanceEditor() {
               {Object.keys(modifiedData[0] || {}).map((key) => (
                 <th key={key} style={{ border: "1px solid #ccc", padding: 8 }}>{key}</th>
               ))}
+              <th style={{ border: "1px solid #ccc", padding: 8 }}>ملاحظات</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((row, rowIndex) => (
-              <tr key={rowIndex} style={{ ...getRowStyle(row), backgroundColor: selectedRowIndex === rowIndex ? "#c5cae9" : getRowStyle(row).backgroundColor }}>
-                <td style={{ border: "1px solid #ccc", padding: 6, textAlign: "center" }} onClick={() => setSelectedRowIndex(rowIndex)}>{rowIndex + 1}</td>
-                {Object.entries(row).map(([key, value], colIndex) => (
-                  <td key={colIndex} style={{ border: "1px solid #ddd", padding: 6 }}>
-                    <input
-                      value={value}
-                      data-row={rowIndex}
-                      data-col={colIndex}
-                      onChange={(e) => handleEdit(rowIndex, key, e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
-                      style={{ width: "100%", border: "none", background: "transparent" }}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {filtered.map((row, rowIndex) => {
+              const plate = normalizePlate(row["Vehicle"]);
+              let note = "";
+              if (plate && duplicatePlates[plate]) {
+                const rows = duplicateRows[plate] || [];
+                const others = rows.filter(n => n !== rowIndex + 1);
+                if (others.length > 0) {
+                  note = `مكرر مع الصفوف: ${others.join(", ")}`;
+                }
+              }
+              return (
+                <tr key={rowIndex} style={{ ...getRowStyle(row), backgroundColor: selectedRowIndex === rowIndex ? "#c5cae9" : getRowStyle(row).backgroundColor }}>
+                  <td style={{ border: "1px solid #ccc", padding: 6, textAlign: "center" }} onClick={() => setSelectedRowIndex(rowIndex)}>{rowIndex + 1}</td>
+                  {Object.entries(row).map(([key, value], colIndex) => (
+                    <td key={colIndex} style={{ border: "1px solid #ddd", padding: 6 }}>
+                      <input
+                        value={value}
+                        data-row={rowIndex}
+                        data-col={colIndex}
+                        onChange={(e) => handleEdit(rowIndex, key, e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                        style={{ width: "100%", border: "none", background: "transparent" }}
+                      />
+                    </td>
+                  ))}
+                  <td style={{ border: "1px solid #ccc", padding: 6, color: "#d84315", fontWeight: "bold", fontSize: 13 }}>{note}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      {filterMode === "delayed" && delayedCars.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <h3 style={{ color: "#d84315" }}>تقرير السيارات المتأخرة:</h3>
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead>
+              <tr>
+                <th style={{ border: "1px solid #ccc", padding: 6 }}>رقم السيارة</th>
+                <th style={{ border: "1px solid #ccc", padding: 6 }}>نوع الضرر</th>
+                <th style={{ border: "1px solid #ccc", padding: 6 }}>تاريخ الخروج</th>
+                <th style={{ border: "1px solid #ccc", padding: 6 }}>عدد أيام التأخير</th>
+              </tr>
+            </thead>
+            <tbody>
+              {delayedCars.map((row, i) => {
+                const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
+                const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
+                const damage = damageKey && row[damageKey];
+                const dateOutStr = dateOutKey && row[dateOutKey];
+                const dateOut = parseDate(dateOutStr);
+                const daysPassed = differenceInDays(today, dateOut);
+                return (
+                  <tr key={i}>
+                    <td style={{ border: "1px solid #ccc", padding: 6 }}>{row["Vehicle"]}</td>
+                    <td style={{ border: "1px solid #ccc", padding: 6 }}>{damage}</td>
+                    <td style={{ border: "1px solid #ccc", padding: 6 }}>{dateOutStr}</td>
+                    <td style={{ border: "1px solid #ccc", padding: 6 }}>{daysPassed}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <style>{`
+        @media (max-width: 900px) {
+          table { min-width: 600px !important; }
+          input { font-size: 12px; }
+        }
+        @media (max-width: 600px) {
+          table { min-width: 400px !important; }
+          input { font-size: 11px; }
+        }
+      `}</style>
     </div>
   );
 }
-
