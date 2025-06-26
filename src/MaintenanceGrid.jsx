@@ -317,38 +317,46 @@ export default function MaintenanceEditor() {
       </div>
 
       {filterMode === "delayed" && delayedCars.length > 0 && (
-        <div style={{ marginTop: 20 }}>
-          <h3 style={{ color: "#d84315" }}>تقرير السيارات المتأخرة:</h3>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
-            <thead>
-              <tr>
-                <th style={{ border: "1px solid #ccc", padding: 6 }}>رقم السيارة</th>
-                <th style={{ border: "1px solid #ccc", padding: 6 }}>نوع الضرر</th>
-                <th style={{ border: "1px solid #ccc", padding: 6 }}>تاريخ الخروج</th>
-                <th style={{ border: "1px solid #ccc", padding: 6 }}>عدد أيام التأخير</th>
-              </tr>
-            </thead>
-            <tbody>
-              {delayedCars.map((row, i) => {
-                const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
-                const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
-                const damage = damageKey && row[damageKey];
-                const dateOutStr = dateOutKey && row[dateOutKey];
-                const dateOut = parseDate(dateOutStr);
-                const daysPassed = differenceInDays(today, dateOut);
-                return (
-                  <tr key={i}>
-                    <td style={{ border: "1px solid #ccc", padding: 6 }}>{row["Vehicle"]}</td>
-                    <td style={{ border: "1px solid #ccc", padding: 6 }}>{damage}</td>
-                    <td style={{ border: "1px solid #ccc", padding: 6 }}>{dateOutStr}</td>
-                    <td style={{ border: "1px solid #ccc", padding: 6 }}>{daysPassed}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+  <div style={{ marginTop: 30 }}>
+    <h3 style={{ color: "#d84315", textAlign: "center", marginBottom: 16, letterSpacing: 1 }}>Delayed Cars Report</h3>
+    <table style={{
+      borderCollapse: "separate",
+      borderSpacing: 0,
+      width: "100%",
+      background: "#fff",
+      borderRadius: 12,
+      overflow: "hidden",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.07)"
+    }}>
+      <thead>
+        <tr style={{ background: "#f5f5f5" }}>
+          <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Car Plate</th>
+          <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Damage Type</th>
+          <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Date Out</th>
+          <th style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>Days Delayed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {delayedCars.map((row, i) => {
+          const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
+          const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
+          const damage = damageKey && row[damageKey];
+          const dateOutStr = dateOutKey && row[dateOutKey];
+          const dateOut = parseDate(dateOutStr);
+          const daysPassed = differenceInDays(today, dateOut);
+          return (
+            <tr key={i} style={{ background: i % 2 === 0 ? "#fafafa" : "#f0f4c3" }}>
+              <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", fontWeight: "bold" }}>{row["Vehicle"]}</td>
+              <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center" }}>{damage}</td>
+              <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center" }}>{dateOutStr}</td>
+              <td style={{ border: "1px solid #ddd", padding: 10, textAlign: "center", color: "#d84315", fontWeight: "bold" }}>{daysPassed}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+)}
       <style>{`
         @media (max-width: 900px) {
           table { min-width: 600px !important; }
