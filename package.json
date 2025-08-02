@@ -4,6 +4,10 @@
   "private": true,
   "homepage": "https://moalamir52.github.io/maintenance",
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^7.2.0",
+    "@mui/x-data-grid": "^8.8.0",
     "date-fns": "^4.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -11,7 +15,8 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "gh-pages": "^6.3.0"
+    "gh-pages": "^6.3.0",
+    "html-webpack-plugin": "^5.6.3"
   },
   "scripts": {
     "start": "react-scripts start",

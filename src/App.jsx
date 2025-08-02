@@ -1,9 +1,10 @@
 // MaintenanceEditor with robust date parsing
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { differenceInDays, parse } from "date-fns";
 import PropTypes from "prop-types";
+import { DataGrid } from '@mui/x-data-grid';
 
 const CLIENT_ID = "412097983726-bs860lb09slcgtiuoetqvoq54jtqn1h1.apps.googleusercontent.com";
 const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
@@ -166,56 +167,55 @@ export default function MaintenanceEditor() {
     });
   }
 
-  const getDelayedCars = (rows) => {
-    return rows.filter(row => {
-      const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
-      const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
-      const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
-
-      const damage = damageKey && row[damageKey]?.toLowerCase();
-      const dateOutStr = dateOutKey && row[dateOutKey]?.trim();
-      const dateIn = dateInKey && row[dateInKey]?.trim();
-
-      if (!dateOutStr || dateIn) return false;
-
-      const dateOut = parseDate(dateOutStr);
-      if (isNaN(dateOut)) return false;
-
-      const daysPassed = differenceInDays(today, dateOut);
-
-      if (damage?.includes("oil") && daysPassed > 3) return true;
-      if (damage?.includes("accident") && daysPassed > 30) return true;
-      if (!damage?.includes("oil") && !damage?.includes("accident") && daysPassed > 3) return true;
-
-      return false;
-    });
-  };
-
   let filtered = [];
-  if (filterMode === "delayed") {
+  if (search.trim() !== "") {
+    // البحث يعمل على كل البيانات بغض النظر عن الفلتر
+    const baseRows = modifiedData.filter(row =>
+      Object.values(row).some(v => typeof v === 'string' && v.toLowerCase().includes(search.toLowerCase()))
+    );
+    filtered = getDisplayRows(baseRows).map((row, i) => ({ ...row, Index: i + 1 }));
+  } else if (filterMode === "delayed") {
     const delayedRows = getDisplayRows(modifiedData).filter(row => row["Days Delayed"] !== "");
     filtered = delayedRows.map((row, i) => ({ ...row, Index: i + 1 }));
+  } else if (filterMode === "totalloss") {
+    // فلترة الصفوف التي تحتوي على 'total loss' في أي عمود
+    const totalLossRows = modifiedData.filter(row =>
+      Object.values(row).some(v => typeof v === 'string' && v.toLowerCase().includes('total loss'))
+    );
+    filtered = getDisplayRows(totalLossRows).map((row, i) => ({ ...row, Index: i + 1 }));
   } else {
     // فلترة حسب الفلتر المختار
     const baseRows = modifiedData.filter(row => {
       const vehicle = row["Vehicle"]?.trim();
       if (!vehicle || vehicle === "#N/A" || vehicle === "") return false;
-      const matchesSearch = Object.values(row).some(v => v.toLowerCase().includes(search.toLowerCase()));
+      // استبعاد الصفوف التي كل أعمدتها (عدا Vehicle) فارغة أو #N/A
+      const dataKeys = Object.keys(row).filter(k => k !== "Vehicle");
+      const hasUsefulData = dataKeys.some(k => {
+        const v = row[k]?.trim();
+        return v && v !== "#N/A";
+      });
+      if (!hasUsefulData) return false;
       const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
       const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
       const damageText = damageKey && row[damageKey]?.toLowerCase();
       const hasDate = dateInKey && row[dateInKey]?.trim() !== "";
       const plate = normalizePlate(row["Vehicle"]);
-      if (filterMode === "accident") return matchesSearch && damageText?.includes("accident") && !hasDate;
-      if (filterMode === "invygo") return matchesSearch && plate && invygoPlates.includes(plate) && !hasDate;
-      if (filterMode === "ready") return matchesSearch && hasDate;
-      if (filterMode === "notready") return matchesSearch && !hasDate;
+      if (filterMode === "accident") return damageText?.includes("accident") && !hasDate;
+      if (filterMode === "invygo") return plate && invygoPlates.includes(plate) && !hasDate;
+      if (filterMode === "ready") return hasDate;
+      if (filterMode === "notready") {
+        const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
+        const hasDateOut = dateOutKey && row[dateOutKey]?.trim() !== "";
+        // استبعاد الصفوف التي تحتوي على 'total loss' في أي عمود
+        const hasTotalLoss = Object.values(row).some(v => typeof v === 'string' && v.toLowerCase().includes('total loss'));
+        return hasDateOut && !hasDate && !hasTotalLoss;
+      }
       if (filterMode === "duplicates") {
         if (!plate || !duplicatePlates[plate]) return false;
         const dateIn = dateInKey && row[dateInKey]?.trim();
         return !dateIn;
       }
-      return matchesSearch;
+      return true;
     });
     // أعد الترقيم بعد الفلترة
     filtered = getDisplayRows(baseRows).map((row, i) => ({ ...row, Index: i + 1 }));
@@ -223,6 +223,7 @@ export default function MaintenanceEditor() {
 
   // دالة توليد الملاحظة لكل صف
   function getNote(row, rowIndex = 0) {
+    console.log('getNote input:', row, rowIndex);
     const plate = normalizePlate(row["Vehicle"]);
     const carType = invygoPlates.includes(plate) ? "Invygo" : "Yelo";
     let status = "";
@@ -339,20 +340,34 @@ export default function MaintenanceEditor() {
 
   const notReadyCount = modifiedData.filter(row => {
     const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
-    return dateInKey && row[dateInKey]?.trim() === "";
+    const dateOutKey = Object.keys(row).find(k => k.toLowerCase().includes("date out"));
+    const hasDateIn = dateInKey && row[dateInKey]?.trim() !== "";
+    const hasDateOut = dateOutKey && row[dateOutKey]?.trim() !== "";
+    // استبعاد الصفوف التي تحتوي على 'total loss' في أي عمود
+    const hasTotalLoss = Object.values(row).some(v => typeof v === 'string' && v.toLowerCase().includes('total loss'));
+    return hasDateOut && !hasDateIn && !hasTotalLoss;
   }).length;
 
   const duplicatesCount = Object.values(duplicatePlates).reduce((a, b) => a + b, 0);
   const delayedCount = getDisplayRows(modifiedData).filter(row => row["Days Delayed"] !== "").length;
 
-  const resetData = () => {
-    if (window.confirm("Are you sure you want to reset all changes?")) {
-      setModifiedData(data);
-      setSearch("");
-      setFilterMode("all");
-      setSelectedRowIndex(null);
-    }
-  };
+  // حساب عدد كل الصفوف الحقيقية (بدون فلتر، لكن مع استبعاد الفارغ و#N/A)
+  const allRowsCount = modifiedData.filter(row => {
+    const vehicle = row["Vehicle"]?.trim();
+    if (!vehicle || vehicle === "#N/A" || vehicle === "") return false;
+    const dataKeys = Object.keys(row).filter(k => k !== "Vehicle");
+    const hasUsefulData = dataKeys.some(k => {
+      const v = row[k]?.trim();
+      return v && v !== "#N/A";
+    });
+    if (!hasUsefulData) return false;
+    return true;
+  }).length;
+
+  // حساب عدد صفوف Total Loss
+  const totalLossCount = modifiedData.filter(row =>
+    Object.values(row).some(v => typeof v === 'string' && v.toLowerCase().includes('total loss'))
+  ).length;
 
   // تحميل gapi وتهيئة OAuth مع معالجة الأخطاء
   useEffect(() => {
@@ -396,8 +411,15 @@ export default function MaintenanceEditor() {
     window.gapi.auth2.getAuthInstance().signOut();
   };
 
+  // دالة ترجمة اسم العمود للرأس
+  function getHeaderLabel(col) {
+    if (col === "Index") return "#";
+    if (col === "Days Delayed") return "D.Delay";
+    return col;
+  }
+
   return (
-    <div style={{ padding: 10, fontFamily: "Segoe UI", maxWidth: 1200, margin: "auto" }}>
+    <div style={{ padding: 10, fontFamily: "Segoe UI", maxWidth: 1200, margin: "auto", paddingBottom: 40 }}>
       {/* Back to YELO button */}
       <a
         href="https://moalamir52.github.io/Yelo/"
@@ -446,20 +468,40 @@ export default function MaintenanceEditor() {
           </div>
         </div>
 
-        <FilterButtons filterMode={filterMode} setFilterMode={setFilterMode} accidentCount={accidentCount} invygoCount={invygoCount} notReadyCount={notReadyCount} duplicatesCount={duplicatesCount} delayedCount={delayedCount} modifiedData={modifiedData} search={search} setSearch={setSearch} />
-        <ExportButtons exportToExcel={exportToExcel} resetData={resetData} />
+        <FilterButtons filterMode={filterMode} setFilterMode={setFilterMode} accidentCount={accidentCount} invygoCount={invygoCount} notReadyCount={notReadyCount} duplicatesCount={duplicatesCount} delayedCount={delayedCount} modifiedData={modifiedData} search={search} setSearch={setSearch} allRowsCount={allRowsCount} totalLossCount={totalLossCount} />
+        <ExportButtons exportToExcel={exportToExcel} />
       </div>
 
       <div style={{ textAlign: "center", marginBottom: 10, color: "#555" }}>✅ Showing {filtered.length} result(s)</div>
 
-      {filtered.length > 0 && (
-        <div style={{ textAlign: "center", marginBottom: 10, color: "red", fontWeight: "bold" }}>
-          🚨 There are {filtered.length} delayed cars in the Showroom!
-        </div>
-      )}
+      <div
+        style={{
+          textAlign: "center",
+          margin: "18px 0",
+          color: "red",
+          fontWeight: "bold",
+          fontSize: 36,
+          letterSpacing: 1,
+          textShadow: "0 2px 8px #ffd600",
+          cursor: "pointer",
+          userSelect: "none"
+        }}
+        onClick={() => setFilterMode("delayed")}
+        title="Show only delayed cars"
+      >
+        🚨 There are {delayedCount} delayed cars in the Showroom!
+      </div>
 
-      <MaintenanceTable filtered={filtered} getRowStyle={getRowStyle} selectedRowIndex={selectedRowIndex} setSelectedRowIndex={setSelectedRowIndex} handleEdit={handleEdit} handleKeyDown={handleKeyDown} duplicatePlates={duplicatePlates} duplicateRows={duplicateRows} getDisplayRows={getDisplayRows} invygoPlates={invygoPlates} search={search} />
+      {/* Responsive Table Container */}
+      <div style={{ width: "100%", overflowX: "auto", margin: "0 auto", maxWidth: 1200 }}>
+        <MaintenanceTable filtered={filtered} getDisplayRows={getDisplayRows} invygoPlates={invygoPlates} duplicatePlates={duplicatePlates} duplicateRows={duplicateRows} getNote={getNote} />
+      </div>
       <style>{`
+        body, html, #root {
+          overflow: visible !important;
+          height: auto !important;
+          min-height: 100vh !important;
+        }
         :root {
           --main-purple: #6a1b9a;
           --main-yellow: #ffd600;
@@ -469,14 +511,29 @@ export default function MaintenanceEditor() {
           --main-blue: #1976d2;
           --main-pink: #9c27b0;
         }
-        tr:hover {
-          background: #f3e5f5 !important;
-          color: #222 !important;
+        .MuiDataGrid-row:hover .mui-cell {
+          background: #fffde7 !important;
+          color: #6a1b9a !important;
+          transition: background 0.2s, color 0.2s;
+        }
+        .row-delayed:hover .mui-cell,
+        .row-duplicate:hover .mui-cell {
+          filter: brightness(1.08);
+          box-shadow: 0 2px 8px #7c4dff;
+        }
+        .mui-cell {
+          border-right: 2px solid #7c4dff !important;
+          padding: 8px 4px !important;
+        }
+        .mui-header {
+          border-right: 2px solid #7c4dff !important;
+          border-bottom: 3px solid #7c4dff !important;
         }
         @media (max-width: 900px) {
           table { min-width: 600px !important; }
           input { font-size: 12px; }
           .main-title-box h2 { font-size: 22px !important; }
+          .mui-cell, .mui-header { font-size: 12px !important; padding: 6px 2px !important; }
         }
         @media (max-width: 600px) {
           .main-title-box > div {
@@ -494,6 +551,7 @@ export default function MaintenanceEditor() {
           }
           table { min-width: 400px !important; }
           input { font-size: 11px; }
+          .mui-cell, .mui-header { font-size: 10px !important; padding: 4px 1px !important; }
         }
         @media (max-width: 400px) {
           .main-title-box > div {
@@ -507,7 +565,31 @@ export default function MaintenanceEditor() {
             font-size: 11px !important;
             padding: 4px 4px !important;
           }
+          .mui-cell, .mui-header { font-size: 9px !important; padding: 2px 1px !important; }
         }
+        /* إخفاء بعض الأعمدة الأقل أهمية على الشاشات الصغيرة */
+        @media (max-width: 600px) {
+          .MuiDataGrid-columnHeaders [data-field="Notes"],
+          .MuiDataGrid-columnHeaders [data-field*="Date"],
+          .MuiDataGrid-columnHeaders [data-field*="Days"],
+          .MuiDataGrid-columnHeaders [data-field*="Index"] {
+            display: none !important;
+          }
+          .MuiDataGrid-cell[data-field="Notes"],
+          .MuiDataGrid-cell[data-field*="Date"],
+          .MuiDataGrid-cell[data-field*="Days"],
+          .MuiDataGrid-cell[data-field*="Index"] {
+            display: none !important;
+          }
+        }
+        /* إعادة تفعيل ألوان تمييز الصفوف المهمة */
+        .row-delayed td { background:rgba(240, 173, 153, 0.64) !important; color:rgb(11, 0, 77) !important; }
+        .row-duplicate td { background: #e53935 !important; color: #fff !important; }
+        .row-invygo-ready td { background: #bbdefb !important; }
+        .row-invygo-notready td { background: #fff !important; border: 1px solid #ccc !important; color: #6a1b9a !important; }
+        .row-ready td { background: #c8e6c9 !important; }
+        .row-accident td { background: #ffcdd2 !important; }
+        .row-notready td { background: #fff9c4 !important; color: #6a1b9a !important; }
       `}</style>
       {loading && <div style={{textAlign:'center',margin:'40px 0',fontSize:22,color:'var(--main-purple)'}} aria-label="Loading data">⏳ Loading data...</div>}
       {sheetError && <div style={{color:'red',textAlign:'center',margin:'20px 0'}}>{sheetError}</div>}
@@ -536,16 +618,34 @@ export default function MaintenanceEditor() {
 MaintenanceEditor.propTypes = {};
 
 // زر البحث في سطر منفصل ومنسق
-function FilterButtons({ filterMode, setFilterMode, accidentCount, invygoCount, notReadyCount, duplicatesCount, delayedCount, modifiedData, search, setSearch }) {
+function FilterButtons({ filterMode, setFilterMode, accidentCount, invygoCount, notReadyCount, duplicatesCount, delayedCount, modifiedData, search, setSearch, allRowsCount, totalLossCount }) {
   return (
     <div style={{ marginBottom: 18 }}>
-      <div className="filter-btns-row" style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-        <button aria-label="Accident filter" onClick={() => setFilterMode("accident")} style={btnStyle("#ff9800")}>🚗 Car Accident ({accidentCount})</button>
-        <button aria-label="Invygo filter" onClick={() => setFilterMode("invygo")} style={btnStyle("#4caf50")}>📦 Invygo Cars ({invygoCount})</button>
-        <button aria-label="Not Ready filter" onClick={() => setFilterMode("notready")} style={btnStyle("#f44336")}>❌ Not Ready ({notReadyCount})</button>
-        <button aria-label="Duplicates filter" onClick={() => setFilterMode("duplicates")} style={btnStyle("#9c27b0")}>🛑 Duplicates ({duplicatesCount})</button>
-        <button aria-label="Delayed filter" onClick={() => setFilterMode("delayed")} style={btnStyle("#ff7043")}>⏱ Show Delayed ({delayedCount})</button>
-        <button aria-label="Show all" onClick={() => setFilterMode("all")} style={btnStyle("#1976d2")}>🔄 Show All ({modifiedData.length})</button>
+      <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        <select
+          aria-label="Filter selector"
+          value={filterMode}
+          onChange={e => setFilterMode(e.target.value)}
+          style={{
+            padding: 10,
+            borderRadius: 12,
+            border: "2px solid #7c4dff",
+            fontSize: 16,
+            minWidth: 180,
+            fontWeight: "bold",
+            color: "#6a1b9a",
+            background: "#fffde7",
+            boxShadow: "0 2px 8px #e1bee7"
+          }}
+        >
+          <option value="all">🔄 Show All ({allRowsCount})</option>
+          <option value="accident">🚗 Car Accident ({accidentCount})</option>
+          <option value="invygo">📦 Invygo Cars ({invygoCount})</option>
+          <option value="notready">❌ Not Ready ({notReadyCount})</option>
+          <option value="duplicates">🛑 Duplicates ({duplicatesCount})</option>
+          <option value="delayed">⏱ Show Delayed ({delayedCount})</option>
+          <option value="totalloss">💥 Total Loss ({totalLossCount})</option>
+        </select>
       </div>
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
         <input
@@ -581,76 +681,152 @@ FilterButtons.propTypes = {
   delayedCount: PropTypes.number.isRequired,
   modifiedData: PropTypes.array.isRequired,
   search: PropTypes.string.isRequired,
-  setSearch: PropTypes.func.isRequired
+  setSearch: PropTypes.func.isRequired,
+  allRowsCount: PropTypes.number.isRequired,
+  totalLossCount: PropTypes.number.isRequired
 };
 
 // زر التصدير اسمه Export فقط
-function ExportButtons({ exportToExcel, resetData }) {
+function ExportButtons({ exportToExcel }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 10 }}>
       <button aria-label="Export all" onClick={exportToExcel} style={btnStyle("#388e3c")}>📤 Export</button>
-      <button aria-label="Reset" onClick={resetData} style={btnStyle("#757575")}>↩️ Reset</button>
     </div>
   );
 }
 ExportButtons.propTypes = {
-  exportToExcel: PropTypes.func.isRequired,
-  resetData: PropTypes.func.isRequired
+  exportToExcel: PropTypes.func.isRequired
 };
 
-// جدول العرض
-function MaintenanceTable({ filtered, getRowStyle, selectedRowIndex, setSelectedRowIndex, handleEdit, handleKeyDown, duplicatePlates, duplicateRows, getDisplayRows, invygoPlates, search }) {
-  const tableRows = filterColumnsWithData(getDisplayRows(filtered));
-  const columns = tableRows.length > 0 ? Object.keys(tableRows[0]) : [];
-  const tableDivStyle = search && search.trim() !== ""
-    ? { overflowX: "auto", maxHeight: "70vh", minHeight: "120px" }
-    : { overflowX: "auto", height: "100vh", minHeight: "100vh" };
+// جدول HTML عادي مع فلترة بالبحث فقط
+function MaintenanceTable({ filtered, getDisplayRows, invygoPlates, duplicatePlates, duplicateRows, getNote }) {
+  // دالة ترجمة اسم العمود للرأس
+  function getHeaderLabel(col) {
+    if (col === "Index") return "#";
+    if (col === "Days Delayed") return "D.Delay";
+    return col;
+  }
+  // دالة إرجاع style خاص لعمود Damage Details
+  function getCellStyle(col, value) {
+    if (col === "Damage Details") {
+      return {
+        border: '1px solid #7c4dff',
+        padding: '6px 3px',
+        fontSize: 13,
+        textAlign: 'center',
+        maxWidth: 320,
+        minWidth: 120,
+        whiteSpace: 'nowrap',
+        wordBreak: 'break-word',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        background: undefined,
+        cursor: value && value.length > 30 ? 'pointer' : undefined
+      };
+    }
+    if (col === "Notes") {
+      return {
+        border: '1px solid #7c4dff',
+        padding: '6px 3px',
+        fontSize: 13,
+        textAlign: 'center',
+        maxWidth: 90,
+        minWidth: 60,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        background: undefined
+      };
+    }
+    return {
+      border: '1px solid #7c4dff',
+      padding: '6px 3px',
+      fontSize: 13,
+      textAlign: 'center',
+      maxWidth: 120,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+      background: undefined
+    };
+  }
+
+  // تجهيز البيانات والأعمدة
+  const tableRows = getDisplayRows(filtered).map((row, i) => ({ ...row, Notes: getNote(row, i) }));
+  const allKeys = Array.from(
+    new Set(
+      tableRows.flatMap(row => Object.keys(row))
+    )
+  );
+  // ترتيب الأعمدة حسب طلب المستخدم
+  const preferredOrder = [
+    "Index", // #
+    "Vehicle",
+    "model",
+    "Damage Details",
+    "Date OUT",
+    "Date IN",
+    "Status",
+    "Days Delayed",
+    "Notes"
+  ];
+  // فقط الأعمدة الموجودة فعليًا في البيانات
+  const columns = [
+    ...preferredOrder.filter(k => allKeys.includes(k)),
+    ...allKeys.filter(k => !preferredOrder.includes(k))
+  ];
+
+  // دالة تحديد كلاس الصف حسب حالته
+  function getRowClass(row) {
+    const plate = normalizePlate(row["Vehicle"]);
+    const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
+    const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
+    const dateIn = dateInKey && row[dateInKey]?.trim();
+    const damageText = damageKey && row[damageKey]?.toLowerCase();
+    const isInvygo = invygoPlates.includes(plate);
+    const isAccident = damageText?.includes("accident") && !dateIn;
+    const isReady = Boolean(dateIn);
+    if (row["Days Delayed"]) return 'row-delayed';
+    if (plate && duplicatePlates[plate]) return 'row-duplicate';
+    if (isInvygo && isReady) return 'row-invygo-ready';
+    if (isInvygo && !isReady) return 'row-invygo-notready';
+    if (!isInvygo && isReady) return 'row-ready';
+    if (isAccident) return 'row-accident';
+    if (!isInvygo && !isReady) return 'row-notready';
+    return '';
+  }
+
   return (
-    <div style={tableDivStyle}>
-      <table aria-label="جدول الصيانة" style={{ borderCollapse: "collapse", width: "100%" }}>
-        <thead style={{ position: "sticky", top: 0, background: "#ffd600", color: "#6a1b9a" }}>
+    <div style={{ width: "100%", overflowX: "auto" }}>
+      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 600, fontFamily: 'Segoe UI', background: '#fff' }}>
+        <thead>
           <tr>
-            {columns.map((key) => (
-              <th key={key} style={{ border: "1px solid #ccc", padding: 8, textAlign: "center" }}>{key}</th>
+            {columns.map(col => (
+              <th key={col} style={{
+                background: '#ffd600',
+                color: '#6a1b9a',
+                fontWeight: 900,
+                fontSize: 14,
+                border: '1px solid #7c4dff',
+                padding: '8px 4px',
+                textAlign: 'center',
+                position: 'sticky',
+                top: 0,
+                zIndex: 2
+              }}>{getHeaderLabel(col)}</th>
             ))}
-            <th style={{ border: "1px solid #ccc", padding: 8, textAlign: "center" }}>Notes</th>
           </tr>
         </thead>
         <tbody>
-          {tableRows.map((row, rowIndex) => {
-            const plate = normalizePlate(row["Vehicle"]);
-            let note = "";
-            let carType = invygoPlates.includes(normalizePlate(row["Vehicle"])) ? "Invygo" : "Yelo";
-            let status = "";
-            if (row["Days Delayed"]) status = "Delayed";
-            else {
-              const damageKey = Object.keys(row).find(k => k.toLowerCase().includes("damag"));
-              const damageText = damageKey && row[damageKey]?.toLowerCase();
-              const dateInKey = Object.keys(row).find(k => k.toLowerCase().includes("date in"));
-              const hasDate = dateInKey && row[dateInKey]?.trim() !== "";
-              if (damageText?.includes("accident")) status = "Accident";
-              else if (hasDate) status = "Repaired";
-              else status = "Not Repaired";
-            }
-            if (plate && duplicatePlates[plate]) {
-              const rows = duplicateRows[plate] || [];
-              const others = rows.filter(n => n !== rowIndex + 1);
-              if (others.length > 0) {
-                status += `, Duplicate with rows: ${others.join(", ")}`;
-              }
-            }
-            note = `${carType} ${status}`;
-            return (
-              <tr key={rowIndex} style={{ ...getRowStyle(row), backgroundColor: selectedRowIndex === rowIndex ? "#c5cae9" : getRowStyle(row).backgroundColor }}>
-                {columns.map((key, colIndex) => (
-                  <td key={colIndex} style={{ border: "1px solid #ddd", padding: 6, textAlign: "center" }}>
-                    {row[key]}
-                  </td>
-                ))}
-                <td style={{ border: "1px solid #ccc", padding: 6, color: "#6a1b9a", fontWeight: "bold", fontSize: 13, textAlign: "center", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{note}</td>
-              </tr>
-            );
-          })}
+          {tableRows.map((row, i) => (
+            <tr key={i} className={getRowClass(row)}>
+              {columns.map(col => (
+                <td key={col} style={getCellStyle(col, row[col])} title={col === 'Damage Details' && row[col] ? row[col] : undefined}>
+                  {row[col] || ''}
+                </td>
+              ))}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -658,15 +834,10 @@ function MaintenanceTable({ filtered, getRowStyle, selectedRowIndex, setSelected
 }
 MaintenanceTable.propTypes = {
   filtered: PropTypes.array.isRequired,
-  getRowStyle: PropTypes.func.isRequired,
-  selectedRowIndex: PropTypes.number,
-  setSelectedRowIndex: PropTypes.func.isRequired,
-  handleEdit: PropTypes.func.isRequired,
-  handleKeyDown: PropTypes.func.isRequired,
-  duplicatePlates: PropTypes.object.isRequired,
-  duplicateRows: PropTypes.object.isRequired,
   getDisplayRows: PropTypes.func.isRequired,
   invygoPlates: PropTypes.array.isRequired,
-  search: PropTypes.string.isRequired
+  duplicatePlates: PropTypes.object.isRequired,
+  duplicateRows: PropTypes.object.isRequired,
+  getNote: PropTypes.func.isRequired,
 };
 
