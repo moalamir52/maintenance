@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 setlocal ENABLEEXTENSIONS
 
 REM ##################################################################
@@ -16,7 +17,7 @@ REM # --- END CONFIGURATION ---
 title Saving and Deploying Project: %CD%
 echo.
 echo ======================================================
-echo = ULTIMATE All-in-One Save ^& Deploy Script         =
+echo = ULTIMATE All-in-One Save & Deploy Script         =
 echo ======================================================
 echo.
 
@@ -25,17 +26,13 @@ REM ########## PART 1: AUTO-FIX & CONFIGURE ##########
 echo [1/4] Preparing environment...
 echo.
 
-REM Step 1.1: Automatically fix 'dubious ownership' issue
-echo  - Adding current directory to Git's safe list...
-git config --global --add safe.directory "%CD%"
-echo  - Done.
+REM The lines below are disabled as they may not be needed and were causing issues.
+REM You can re-enable them if you face 'dubious ownership' or identity errors.
+REM ----------------------------------------------------------------------------
+REM git config --global --add safe.directory "%CD%"
+REM git config --global user.name %GIT_USER_NAME%
+REM git config --global user.email %GIT_USER_EMAIL%
 
-REM Step 1.2: Configure Git Identity
-echo  - Configuring Git identity...
-git config --global user.name %GIT_USER_NAME%
-git config --global user.email %GIT_USER_EMAIL%
-echo  - Git identity set to: %GIT_USER_NAME%
-echo.
 
 REM ########## PART 2: SAVE SOURCE CODE ##########
 
@@ -43,6 +40,7 @@ echo [2/4] Saving your work to 'main' branch...
 echo.
 set /p COMMIT_MESSAGE=">> Enter your commit message (e.g., 'update maintenance page'): "
 IF "%COMMIT_MESSAGE%"=="" SET COMMIT_MESSAGE=chore: auto-save changes
+
 
 echo.
 echo  - Committing with message: "%COMMIT_MESSAGE%"
@@ -70,7 +68,15 @@ REM ########## PART 3: DEPLOY TO GITHUB PAGES ##########
 echo [3/4] Starting deployment to GitHub Pages...
 echo.
 
-REM Step 3.1: Clean install of dependencies
+REM Step 3.1: Ensure no old processes are running
+echo  - Terminating any running Node.js processes...
+rem The following command will forcefully terminate all node.exe processes.
+rem Output is hidden because an error will be shown if no processes are found, which is expected.
+taskkill /F /IM node.exe /T >nul 2>&1
+echo  - Done.
+echo.
+
+REM Step 3.2: Clean install of dependencies
 echo  - Installing dependencies using 'npm ci'...
 call npm ci
 IF %ERRORLEVEL% NEQ 0 (
@@ -100,7 +106,7 @@ echo.
 
 
 echo ======================================================
-echo = 🚀 SAVE ^& DEPLOYMENT COMPLETE!                      =
+echo = 🚀 SAVE & DEPLOYMENT COMPLETE!                      =
 echo ======================================================
 echo.
 
